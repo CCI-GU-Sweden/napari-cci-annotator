@@ -94,7 +94,7 @@ def extract_labeled_region(label_image, label):
 
 def morpho_data_generator(myelin_label_image, axon_label_image, data_image):
     
-    properties = ['label', 'bbox','image','centroid']
+    properties = ['label', 'bbox', 'image', 'centroid']
     
     reg_table = regionprops_table(label_image=myelin_label_image,
                             properties=properties)
@@ -108,7 +108,7 @@ def morpho_data_generator(myelin_label_image, axon_label_image, data_image):
     totCnt = 0
     axon_max_label = np.max(axon_label_image)
 
-    for index, row in reg_table.iterrows():
+    for _, row in reg_table.iterrows():
 
         min_r = row['bbox-0']
         min_c = row['bbox-1']
@@ -131,13 +131,13 @@ def morpho_data_generator(myelin_label_image, axon_label_image, data_image):
             axon_lbl_crop = axon_lbl_crop * axon_bw_crop
 
         print(f"calculated {totCnt}:th morphometric!")
-        totCnt += 1        
+        totCnt += 1
         yield get_morphos_for_label_data(myelin_lbl,myelin_bw, axon_lbl_crop, axon_bw_crop, img_data, axon_max_label, min_r, min_c)
         
         
 def auto_calculate_axon_region(myelin_bw_fill, myelin_bw):
     auto_axon_region = np.logical_xor(myelin_bw_fill,myelin_bw)
-    if np.sum(auto_axon_region)>= 100:
+    if np.sum(auto_axon_region) >= 100:
         return auto_axon_region
     
     warnings.warn("The axon was most probably not closed.")

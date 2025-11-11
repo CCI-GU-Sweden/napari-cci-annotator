@@ -1,19 +1,18 @@
-from ultralytics import YOLO
-from ultralytics.utils.ops import scale_masks
-import torch
-
-import numpy as np
-import dask as da
-from pathlib import Path
 import random
-from functools import partial
 import threading
+from collections import defaultdict
+from functools import partial
+from timeit import default_timer as timer
+
+import dask as da
+import numpy as np
 import skimage.color
 import skimage.segmentation
-from timeit import default_timer as timer
-from collections import defaultdict
-import threading
+from ultralytics import YOLO
+from ultralytics.utils.ops import scale_masks
+
 import napari_cci_annotator._id_table as id_table
+
 
 class IntGenerator:
     def __init__(self, startValue = 100):
@@ -30,6 +29,7 @@ class IntGenerator:
             self.cnt += 1
             return self.startValue + self.cnt
 
+
 class AbstractSegmenter:
     def __init__(self, img_size):
         self.model_mutex = threading.Lock()
@@ -39,10 +39,9 @@ class AbstractSegmenter:
         return self.image_size
     
     
-    
 # class StarDistSegmenter(AbstractSegmenter):
-    
-#     def __init__(self, model_name, base_dir, img_size):
+
+# #     def __init__(self, model_name, base_dir, img_size):
 #         super(StarDistSegmenter,self).__init__(img_size)
 #         self.axis_norm = (0,1)   # normalize channels independently
 #         self.model_name = model_name
@@ -58,7 +57,7 @@ class AbstractSegmenter:
 class YoloSegmenter(AbstractSegmenter):
     
     def __init__(self, model_path, image_dim):
-        super(YoloSegmenter,self).__init__(image_dim)
+        super().__init__(image_dim)
         self.intGen = IntGenerator()
         self.model = YOLO(model_path, task='segment')
     
@@ -67,7 +66,6 @@ class YoloSegmenter(AbstractSegmenter):
         results = self.model(source=input_data, imgsz=self.image_size,verbose=False)
         return results
     
-
     def segment_wrapper(self, data, block_id):
         with self.model_mutex:
             #print(f"segment chunk {block_id}, {data.shape}, {dimension}")
@@ -75,7 +73,7 @@ class YoloSegmenter(AbstractSegmenter):
             input_data = np.ascontiguousarray(rgb_data)
             result = self.model.predict(source=input_data, imgsz=self.getImageSize(),verbose=False)
  
-        computed_result = result#[0].compute()
+        computed_result = result  #[0].compute()
         all_masks = np.zeros(shape=data.shape, dtype=np.uint32)
         if computed_result is None or computed_result[0].masks is None:
             return all_masks
@@ -83,7 +81,7 @@ class YoloSegmenter(AbstractSegmenter):
         result_masks = computed_result[0].masks
         
         masks = result_masks.data
-        if not data.shape[0] == self.getImageSize() or not data.shape[1]  == self.getImageSize():
+        if data.shape[0] != self.getImageSize() or data.shape[1] != self.getImageSize():
             if masks.ndim == 2:
                 masks = masks.unsqueeze(0).unsqueeze(0)  # Now shape is (1, 1, H, W)
             elif masks.ndim == 3:
@@ -99,7 +97,7 @@ class YoloSegmenter(AbstractSegmenter):
         sh2 = all_masks.shape[1]
 
         for n in range(segments):
-            res =masks[n]
+            res = masks[n]
             mask = res * self.intGen.getNext()
             all_masks[:sh1, :sh2] = np.where(all_masks[:sh1, :sh2] == 0, mask[:sh1, :sh2], all_masks[:sh1, :sh2])
 
@@ -113,7 +111,6 @@ class LargeImageSegmenter:
         self.model_mutex = threading.Lock()
         random.seed()
         self.tableOfIds = id_table.EquivalenceList()
-
 
     # def isotrophic_opening(radius,chunk):
     #     bin_chunk = (chunk > 0)
@@ -147,87 +144,87 @@ class LargeImageSegmenter:
         
         neighbour_mod = -1 if not scan_far_side else 1
         
-        if scan_vertical: 
-            neighbour_coords_mod =  (neighbour_mod,0)
+        if scan_vertical:
+            neighbour_coords_mod = (neighbour_mod,0)
             scan_size = data.shape[1]
         else:
-            neighbour_coords_mod =  (0,neighbour_mod)
+            neighbour_coords_mod = (0, neighbour_mod)
             scan_size = data.shape[0]
 
         connected_table = defaultdict(lambda: defaultdict(int))
         max_neighbour_local_table = defaultdict(lambda: defaultdict(int))
         for coord in range(scan_size):
             if scan_vertical:
-                y = coord 
+                y = coord
             else:
                 x = coord
 
             #construct table that holds which structures have most connecting pixels to the neighbour structure
-            local_indices     = (x, y)
+            local_indices = (x, y)
             neighbour_indices = (x + neighbour_coords_mod[0], y + neighbour_coords_mod[1])
             id_local = data[local_indices]
-            id_neighbour =  data[neighbour_indices]
-            if  id_local != 0 and id_neighbour != 0 and id_neighbour != id_local:
+            id_neighbour = data[neighbour_indices]
+            if id_local != 0 and id_neighbour != 0 and id_neighbour != id_local:
                 connected_table[id_local][id_neighbour] += 1
-                max_neighbour_local_table[id_neighbour][id_local] += 1 
+                max_neighbour_local_table[id_neighbour][id_local] += 1
                 
         #only keep the maximum values per neighbour
         neighbour_max = {}
-        for outer_key in max_neighbour_local_table.keys():
+        for outer_key in max_neighbour_local_table:
             max_cnt = 0
-            id = max_neighbour_local_table[outer_key]
-            id = {k: v for k, v in id.items() if v == max(id.values())}
-            neighbour_max[outer_key] = list(id.keys())[0]
+            nid = max_neighbour_local_table[outer_key]
+            nid = {k: v for k, v in nid.items() if v == max(nid.values())}
+            neighbour_max[outer_key] = list(nid.keys())[0]
                     
-        for n in neighbour_max.keys():
+        for n in neighbour_max:
             loc = neighbour_max[n]
-            for l in connected_table.keys():
-                if l != loc: #we know this is NOT the local id that should be set to neighbour
-                    connected_table[l][n] = 0
+            for ll in connected_table:
+                if ll != loc:  # we know this is NOT the local id that should be set to neighbour
+                    connected_table[ll][n] = 0
 
         filtered = []
         for idx, outer_key in enumerate(connected_table.keys()):
             max_cnt = 0
             filtered.append((outer_key,0))
-            for inner_key in connected_table[outer_key].keys():
+            for inner_key in connected_table[outer_key]:
                 value = connected_table[outer_key][inner_key]
                 if value > max_cnt:
                     max_cnt = value
                     filtered[idx] = (outer_key,inner_key)
                     
         #merge data in local and neighbour structures
-        for (l,n) in filtered:
-            id_l = l
+        for (ll, n) in filtered:
+            id_l = ll
             id_n = n
-            self.tableOfIds.add_eqvivalence_pair(id_l,id_n)
+            self.tableOfIds.add_eqvivalence_pair(id_l, id_n)
 
         return data
 
-    def find_and_change_ids_along_border(self,data, block_info = None):    
+    def find_and_change_ids_along_border(self, data, block_info=None):
         
         d1 = data.shape[0]
         d2 = data.shape[1]
         id_set = set()
         
-        for y in [0,d2-1]:
+        for y in [0, d2 - 1]:
             for x in range(d1):
                 local_indices = (x, y)
                 id_local = data[local_indices]
                 if id_local != 0:
                     id_set.add(id_local)
             
-        for x in [0, d1-1]:
+        for x in [0, d1 - 1]:
             for y in range(d2):
                 local_indices = (x, y)
                 id_local = data[local_indices]
                 if id_local != 0:
                     id_set.add(id_local)
             
-        for id in id_set:
-            eq_id = self.tableOfIds.get_equivalent_id(id)
-            if id != eq_id:
-                print(f"setting id: {id} to eq_id: {eq_id}")
-                idxs = np.where(data == id)
+        for sid in id_set:
+            eq_id = self.tableOfIds.get_equivalent_id(sid)
+            if sid != eq_id:
+                print(f"setting id: {sid} to eq_id: {eq_id}")
+                idxs = np.where(data == sid)
                 data[idxs] = eq_id
         
         return data
@@ -235,7 +232,7 @@ class LargeImageSegmenter:
     def calculate_chunk_size(self, imgsize, overlap):
         return int(imgsize - (2 * overlap))
 
-    def segment_large_image_crop_to_match_model_size(self, concrete_segmenter, imageData, imgSize = 1024, overlap = 100, clearBorders=False):
+    def segment_large_image_crop_to_match_model_size(self, concrete_segmenter, imageData, imgSize=1024, overlap=100, clearBorders=False):
         chunk_size = self.calculate_chunk_size(imgSize,overlap)
         img_width = imageData.shape[0]
         crop_width = (img_width // chunk_size) * chunk_size
@@ -245,12 +242,12 @@ class LargeImageSegmenter:
         
         return self.segment_large_image_data(concrete_segmenter, imageData[:crop_width,:crop_height], imgSize=concrete_segmenter.getImageSize(), clearBorders=clearBorders)
 
-    def segment_large_image(self, concrete_segmenter, imagePath, clearBorders = False):
+    def segment_large_image(self, concrete_segmenter, imagePath, clearBorders=False):
 
         img_data = da.array.image.imread(imagePath)
         return self.segment_large_image_data(concrete_segmenter, img_data, imgSize=concrete_segmenter.getImageSize(), clearBorders=clearBorders)
 
-    def segment_large_image_data(self, concrete_segmenter, imageData, imgSize = 1024, overlap = 100, clearBorders = False):
+    def segment_large_image_data(self, concrete_segmenter, imageData, imgSize=1024, overlap=100, clearBorders=False):
 
         large_image_tmp = da.array.from_array(imageData)
         s = large_image_tmp.shape
