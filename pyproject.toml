@@ -49,8 +49,11 @@ testing = [
 
 
 
+#[build-system]
+#requires = ["setuptools>=42.0.0", "wheel"]
+#build-backend = "setuptools.build_meta"
 [build-system]
-requires = ["setuptools>=42.0.0", "wheel"]
+requires = ["setuptools>=64", "setuptools_scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -63,8 +66,11 @@ where = ["src"]
 "*" = ["*.yaml"]
 #"*" = ["*.yaml","models/**/*"]
 
-[tool.setuptools.dynamic]
-version = {attr = "napari_cci_annotator.__init__.__version__"}
+[tool.setuptools_scm]
+write_to = "src/napari_cci_annotator/_version.py"
+
+#[tool.setuptools.dynamic]
+#version = {attr = "napari_cci_annotator.__init__.__version__"}
 
 [tool.black]
 line-length = 79

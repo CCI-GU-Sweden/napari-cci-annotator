@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+src/napari_cci_annotator/_version.py
+
 # C extensions
 *.so
 
