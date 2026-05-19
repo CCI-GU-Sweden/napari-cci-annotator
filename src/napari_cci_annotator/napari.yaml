@@ -7,7 +7,7 @@ categories: ["Annotation", "Segmentation"]
 contributions:
   commands:
     - id: napari-cci-annotator.make_qwidget
-      python_name: napari_cci_annotator:CciAnnotatorQWidget
+      python_name: napari_cci_annotator._widget:CciAnnotatorQWidget
       title: CCI annotator plugin
   widgets:
     - command: napari-cci-annotator.make_qwidget
