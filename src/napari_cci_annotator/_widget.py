@@ -711,11 +711,20 @@ class CciAnnotatorQWidget(QWidget):
         return True, myelin_label_layer, axon_label_layer, image_layer
 
     def _on_read_ann_btn_click(self):
+        print("BUTTON PRESSED")
+
+        print("All layers:")
+        for layer in self.viewer.layers:
+            print(layer.name, type(layer), layer.data.shape, layer.data.dtype)
+
         res, myelin_label_layer, axon_label_layer, image_layer = (
             self._check_layers_for_morpho()
         )
-        if not res:
-            return False
+
+        print("check results:", res)
+        print("myelin layer:", myelin_label_layer)
+        print("axon layer:", axon_label_layer)
+        print("image layer:", image_layer.name)
 
         future = self.ann_handler.add_annotations_to_model(
             myelin_label_layer.data,
@@ -723,6 +732,15 @@ class CciAnnotatorQWidget(QWidget):
             image_layer.data,
             self._update_progress_callback,
         )
+
+        print("future:", future)
+
+        def debug_done(f):
+            print("future done")
+            print("Exception:", f.exception())
+            print("Annotations", self.ann_handler.count())
+
+        future.add_done_callback(debug_done)
 
         def onFinished():
             return (

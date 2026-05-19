@@ -19,10 +19,10 @@ OPENVINO_MYELIN_MODEL_DIR_NAME = "latest_model_openvino_model/"
 OPENVINO_MYELIN_MODEL_PATH = 'myelin/' + OPENVINO_MYELIN_MODEL_DIR_NAME
 
 OPENVINO_AXON_MODEL_DIR_NAME = "axon_model_20250512_openvino_model/"
-OPENVINO_AXONS_MODEL_PATH = 'axons/' + OPENVINO_AXON_MODEL_DIR_NAME
+OPENVINO_AXON_MODEL_PATH = 'axons/' + OPENVINO_AXON_MODEL_DIR_NAME
 
 OPENVINO_UNAXON_MODEL_DIR_NAME = "unaxon_model_1125_openvino_model/"
-OPENVINO_UNAXONS_MODEL_PATH = 'unmyelinated_axons/' + OPENVINO_AXON_MODEL_DIR_NAME
+OPENVINO_UNAXON_MODEL_PATH = 'unmyelinated_axons/' + OPENVINO_UNAXON_MODEL_DIR_NAME
 
 AXON_IMG_SIZE = 1024
 MYELIN_IMG_SIZE = 1024
@@ -57,11 +57,11 @@ def get_model_path(cell_type: str, backend: str) -> Tuple[bool, str]:
 
     if backend.startswith(OPENVINO_BACKEND_PREFIX):
         if cell_type_low == "axons":
-            res_path = model_file_path.joinpath(OPENVINO_AXON_MODEL_DIR_NAME)
+            res_path = model_file_path.joinpath(OPENVINO_AXON_MODEL_PATH)
         elif cell_type_low == "unmyelinated axons":
-            res_path = model_file_path.joinpath(OPENVINO_UNAXON_MODEL_DIR_NAME)
+            res_path = model_file_path.joinpath(OPENVINO_UNAXON_MODEL_PATH)
         else:
-            res_path = model_file_path.joinpath(OPENVINO_MYELIN_MODEL_DIR_NAME)
+            res_path = model_file_path.joinpath(OPENVINO_MYELIN_MODEL_PATH)
     else:
         if cell_type_low == "axons":
             res_path = model_file_path.joinpath(AXON_MODEL_PATH)
@@ -69,5 +69,11 @@ def get_model_path(cell_type: str, backend: str) -> Tuple[bool, str]:
             res_path = model_file_path.joinpath(UNAXON_MODEL_PATH)
         else:
             res_path = model_file_path.joinpath(MYELIN_MODEL_PATH)
-        
+
+    print("MODEL PATH SETTING:", model_file_path)
+    print("CELL TYPE:", cell_type_low)
+    print("BACKEND:", backend)
+    print("RESOLVED MODEL PATH:", res_path)
+    print("EXISTS:", res_path.exists())
+
     return True, str(res_path)

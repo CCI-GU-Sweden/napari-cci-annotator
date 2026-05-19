@@ -4,7 +4,7 @@ from collections import defaultdict
 from functools import partial
 from timeit import default_timer as timer
 
-import dask as da
+import dask.array as da
 import numpy as np
 import skimage.color
 import skimage.segmentation
@@ -98,7 +98,7 @@ class YoloSegmenter(AbstractSegmenter):
 
         for n in range(segments):
             res = masks[n]
-            mask = res * self.intGen.getNext()
+            mask = res.astype("uint32") * self.intGen.getNext()
             all_masks[:sh1, :sh2] = np.where(all_masks[:sh1, :sh2] == 0, mask[:sh1, :sh2], all_masks[:sh1, :sh2])
 
         return all_masks
@@ -244,19 +244,19 @@ class LargeImageSegmenter:
 
     def segment_large_image(self, concrete_segmenter, imagePath, clearBorders=False):
 
-        img_data = da.array.image.imread(imagePath)
+        img_data = da.image.imread(imagePath)
         return self.segment_large_image_data(concrete_segmenter, img_data, imgSize=concrete_segmenter.getImageSize(), clearBorders=clearBorders)
 
     def segment_large_image_data(self, concrete_segmenter, imageData, imgSize=1024, overlap=100, clearBorders=False):
 
-        large_image_tmp = da.array.from_array(imageData)
+        large_image_tmp = da.from_array(imageData)
         s = large_image_tmp.shape
         chunk_size = self.calculate_chunk_size(imgSize, overlap)
         
         large_image = large_image_tmp.reshape((s[0],s[1])).rechunk((chunk_size,chunk_size,1))
 
         meta = np.empty((chunk_size, chunk_size), dtype=np.uint32)
-        segment_results = da.array.map_overlap(concrete_segmenter.segment_wrapper, large_image, meta=meta, chunks=(chunk_size,chunk_size) ,depth=overlap, boundary='reflect', trim=True, allow_rechunk=True)
+        segment_results = da.map_overlap(concrete_segmenter.segment_wrapper, large_image, meta=meta, chunks=(chunk_size,chunk_size) ,depth=overlap, boundary='reflect', trim=True, allow_rechunk=True)
 
         dep = 1
         merge_horizontal = partial(self.caclulate_neighbour_equivalence_ids,img_size = chunk_size, scan_vertical = False)
@@ -269,7 +269,7 @@ class LargeImageSegmenter:
 
         self.tableOfIds.group_ids()
 
-        new_dask_array = da.array.from_array(res)
+        new_dask_array = da.from_array(res)
         
         final_dask = new_dask_array.reshape((s[0],s[1])).rechunk((chunk_size,chunk_size,1))
     

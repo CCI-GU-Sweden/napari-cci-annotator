@@ -47,7 +47,7 @@ class AnnotationsHandler:
 
     def clear_model(self):
         self._ann_model.clear()
-        self._proxy_model.clear()
+        #self._proxy_model.clear()
         self.set_headers()
 
     def count(self):
