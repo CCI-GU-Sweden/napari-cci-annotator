@@ -1,5 +1,5 @@
 [project]
-name = "napari-cci-annotator"
+name = "napari-cci-annotator2"
 dynamic = ["version"]
 description = "Plugin to simplify annotations of datasets"
 readme = "README.md"
