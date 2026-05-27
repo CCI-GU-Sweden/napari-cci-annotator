@@ -84,3 +84,4 @@ venv/
 
 # written by setuptools_scm
 **/_version.py
+src/napari_cci_annotator/_version.py
