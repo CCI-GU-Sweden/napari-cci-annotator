@@ -27,11 +27,11 @@ dependencies = [
     "magicgui",
     "qtpy",
     "scikit-image",
-    "ultralytics",
+    "ultralytics<8.4",
     "shapely",
     "dask",
     "xlsxwriter",
-    "openvino",
+    "openvino<2026",
 ]
 
 [project.optional-dependencies]
