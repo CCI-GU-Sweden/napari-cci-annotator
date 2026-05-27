@@ -6,9 +6,9 @@ visibility: public
 categories: ["Annotation", "Segmentation"]
 contributions:
   commands:
-    - id: napari-cci-annotator.make_qwidget
+    - id: napari-cci-annotator2.make_qwidget
       python_name: napari_cci_annotator._widget:CciAnnotatorQWidget
       title: CCI annotator plugin
   widgets:
-    - command: napari-cci-annotator.make_qwidget
+    - command: napari-cci-annotator2.make_qwidget
       display_name: CCI Annotator Plugin
