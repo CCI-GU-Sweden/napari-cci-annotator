@@ -45,7 +45,7 @@ testing = [
 ]
 
 [project.entry-points."napari.manifest"]
- napari-cci-annotator = "napari_cci_annotator:napari.yaml"
+ napari-cci-annotator2 = "napari_cci_annotator:napari.yaml"
 
 
 
