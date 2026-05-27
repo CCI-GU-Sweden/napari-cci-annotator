@@ -1,4 +1,4 @@
-name: napari-cci-annotator
+name: napari-cci-annotator2
 display_name: CCI Annotator
 # use 'hidden' to remove plugin from napari hub search results
 visibility: public
