@@ -5,18 +5,16 @@ import concurrent.futures
 import numpy as np
 from napari import layers
 
-#from pydantic import InstanceOf
 from qtpy.QtCore import QDir, QModelIndex
 from qtpy.QtWidgets import QFileSystemModel
 from skimage import color, io
 from ultralytics import YOLO
-
 import napari_cci_annotator._config as _config
-
+from . import _settigns
 from .morphometrics import create_morpho_table_from_data
+from .segment_large_image_using_yolo import LargeImageSegmenter, YoloSegmenter, get_clean_masks
+from skimage.measure import label, regionprops, find_contours
 
-#from .segment_large_image_using_yolo import segment_large_image_data
-from .segment_large_image_using_yolo import LargeImageSegmenter, YoloSegmenter
 
 
 class ImageHandler:
@@ -176,20 +174,29 @@ class ImageHandler:
         _, model_file_path = _config.get_model_path(cell_type, backend)
         if not model_file_path:
             return
-        
+        cell_type_low = cell_type.lower()
+        conf = _config.get_conf(cell_type_low)
+
         model = YOLO(model_file_path, task='segment')
         rgb_data = self.getDataToAnnotate(imgIndx)
         img_size = _config.get_image_size(cell_type)
-        results = model.predict(source=rgb_data, imgsz=img_size, show_boxes=False, show_labels=False, verbose=False)
-        result_masks = results[0].masks
-        masks = result_masks.data.cpu().numpy()
-        shape = results[0].masks.shape
+        results = model.predict(source=rgb_data,
+                                imgsz=img_size,
+                                show_boxes=False,
+                                show_labels=False,
+                                verbose=False,
+                                conf=conf,
+                                retina_masks=True)
+
+        masks = results[0].masks.data.cpu().numpy()
+        clean_masks = get_clean_masks(masks)
+        shape = clean_masks.shape
         if not labels_layer:
             all_masks = np.zeros(shape=(img_size, img_size), dtype=np.uint32)
         else:
             all_masks = labels_layer.data
         for n in range(shape[0]):
-            mask = masks[n, :, :] * (n + 1)
+            mask = clean_masks[n] * (n + 1)
             mask = np.expand_dims(mask, axis=2)
             mask = np.squeeze(mask).astype(np.uint32)
             all_masks = np.where(all_masks == 0, mask, all_masks)
@@ -203,33 +210,13 @@ class ImageHandler:
     def annotate_selected_layer(self, overlap, napariViewer, be_type, cell_type, crop_image, clear_border):
         
         cell_type_low = cell_type.lower()
-        
-        # if cell_type_low != "axons" and cell_type_low != "myelin":
-        #     return False, None
-        
-        # rdir = os.path.dirname(os.path.realpath(__file__))
-        
-        # model_file_path = rdir + '/' + _config.MODELS_DIR + '/' + cell_type_low + '/'
-        
-        # if be_type.startswith(_config.OPENVINO_BACKEND_PREFIX):
-        #     if cell_type_low == "axons":
-        #         model_file_path += _config.OPENVINO_AXON_MODEL_DIR_NAME
-        #     else:
-        #         model_file_path += _config.OPENVINO_MYELIN_MODEL_DIR_NAME
-        # else:
-        #     if cell_type_low == "axons":
-        #         model_file_path +=  _config.AXON_MODEL_FILENAME
-        #     else:
-        #         model_file_path +=  _config.MYELIN_MODEL_FILENAME
-        
-        #res, model_file_path = self.getModelPath(cell_type_low, be_type)
+
         res, model_file_path = _config.get_model_path(cell_type_low, be_type)
         if not res:
             return False, None
-        
-        yolo_seg = YoloSegmenter(model_file_path, 1024)
-        #sd_seg = StarDistSegmenter(_config.AXON_MODEL_NAME,model_file_path,img_size=1024)
-        #model = YOLO(model_file_path, task='segment')
+
+        conf = _config.get_conf(cell_type_low)
+        yolo_seg = YoloSegmenter(model_file_path, 1024, conf=conf)
         segmenter = LargeImageSegmenter()
         selected = napariViewer.layers.selection.active
         if not selected or not isinstance(selected, layers.Image):
@@ -241,24 +228,6 @@ class ImageHandler:
         
         future = self.executor.submit(func, yolo_seg, selected.data, 1024, overlap, clear_border)
         return True, future
-
-    # def annotate_selected_layer(self, overlap, radius, napariViewer, be_type):
-        
-    #     rdir = os.path.dirname(os.path.realpath(__file__))
-    #     if be_type.startswith(_config.OPENVINO_BACKEND_PREFIX):
-    #         model_file_path = rdir + '/' + _config.OPENVINO_MODEL_PATH
-    #     else:
-    #         model_file_path = rdir + '/' + _config.MYELIN_MODEL_PATH
-        
-    #     yoseg = YoloSegmenter(model_file_path,1024)
-    #     #model = YOLO(model_file_path, task='segment')
-    #     segmenter = LargeImageSegmenter()
-    #     selected = napariViewer.layers.selection.active
-    #     if not selected:
-    #         return False, None
-    #     # Submit the task to the executor and get a Future object
-    #     future = self.executor.submit(segmenter.segment_large_image_data,yoseg, selected.data, 1024, over_lap=100)
-    #     return True, future
 
     def delete_annotation(self, index, napariViewer):
         annName = self.getAnnData(index)

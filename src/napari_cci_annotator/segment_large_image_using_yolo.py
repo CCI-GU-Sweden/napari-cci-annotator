@@ -3,16 +3,74 @@ import threading
 from collections import defaultdict
 from functools import partial
 from timeit import default_timer as timer
-
+from skimage.measure import label, regionprops, find_contours
+from pathlib import Path
 import dask.array as da
 import numpy as np
 import skimage.color
 import skimage.segmentation
 from ultralytics import YOLO
 from ultralytics.utils.ops import scale_masks
+from matplotlib.pyplot import imsave
 
 import napari_cci_annotator._id_table as id_table
+from napari_cci_annotator import _settigns
+from skimage.measure import find_contours
+import numpy as np
 
+def has_cut_bbox_edge(mask, min_edge_len=25, fill_frac=0.75, band=4):
+    ys, xs = np.where(mask)
+
+    if len(xs) == 0:
+        return False
+
+    y0, y1 = ys.min(), ys.max()
+    x0, x1 = xs.min(), xs.max()
+
+    h = y1 - y0 + 1
+    w = x1 - x0 + 1
+
+    if h < min_edge_len and w < min_edge_len:
+        return False
+
+    top = mask[y0:y0 + band, x0:x1 + 1]
+    bottom = mask[max(y0, y1 - band + 1):y1 + 1, x0:x1 + 1]
+    left = mask[y0:y1 + 1, x0:x0 + band]
+    right = mask[y0:y1 + 1, max(x0, x1 - band + 1):x1 + 1]
+
+    if w >= min_edge_len and top.mean() >= fill_frac:
+        return True
+    if w >= min_edge_len and bottom.mean() >= fill_frac:
+        return True
+    if h >= min_edge_len and left.mean() >= fill_frac:
+        return True
+    if h >= min_edge_len and right.mean() >= fill_frac:
+        return True
+
+    return False
+
+def get_clean_masks(masks):
+    clean_masks = []
+
+    for mask in masks:
+        mask = mask > 0
+        labels = label(mask)
+        regions = regionprops(labels)
+
+        if len(regions) == 0:
+            continue
+
+        largest = max(regions, key=lambda x: x.area)
+
+        mask_bool = labels == largest.label
+        if has_cut_bbox_edge(mask_bool, min_edge_len=25, fill_frac=0.65):
+            continue
+        clean_masks.append(mask_bool)
+
+    if len(clean_masks) == 0:
+        return np.empty((0, masks.shape[1], masks.shape[2]), dtype=bool)
+
+    return np.stack(clean_masks, axis=0)
 
 class IntGenerator:
     def __init__(self, startValue = 100):
@@ -37,41 +95,49 @@ class AbstractSegmenter:
         
     def getImageSize(self):
         return self.image_size
-    
-    
-# class StarDistSegmenter(AbstractSegmenter):
 
-# #     def __init__(self, model_name, base_dir, img_size):
-#         super(StarDistSegmenter,self).__init__(img_size)
-#         self.axis_norm = (0,1)   # normalize channels independently
-#         self.model_name = model_name
-#         self.model = StarDist2D(None, name=model_name, basedir=base_dir)
-
-    
-#     def segment_wrapper(self, data):
-#         n_data = normalize(data,1,99.8,axis=self.axis_norm)
-#         labels, details = self.model.predict_instances(n_data)
-#         return labels
-    
 
 class YoloSegmenter(AbstractSegmenter):
     
-    def __init__(self, model_path, image_dim):
+    def __init__(self, model_path, image_dim, conf =0.25):
         super().__init__(image_dim)
         self.intGen = IntGenerator()
         self.model = YOLO(model_path, task='segment')
-    
+        self.conf = conf
+
     def segment(self, data):
         input_data = np.ascontiguousarray(data)
-        results = self.model(source=input_data, imgsz=self.image_size,verbose=False)
-        return results
+        result = self.model.predict(source=input_data,
+                                    imgsz=self.getImageSize(),
+                                    verbose=False,
+                                    conf=self.conf,
+                                    retina_masks=True)
+        return result
     
     def segment_wrapper(self, data, block_id):
         with self.model_mutex:
             #print(f"segment chunk {block_id}, {data.shape}, {dimension}")
             rgb_data = skimage.color.gray2rgb(data)
             input_data = np.ascontiguousarray(rgb_data)
-            result = self.model.predict(source=input_data, imgsz=self.getImageSize(),verbose=False)
+
+            #Remember to remove just debugging now
+            debug_dir = Path("/home/noema/code/gisela_workflow/debug_tiles")
+            debug_dir.mkdir(exist_ok=True)
+
+            #imsave(
+            #    debug_dir / f"tile_{block_id}.png",
+            #    data.astype(np.uint8)
+            #)
+
+            np.save(debug_dir / f"tile_{block_id}.npy", data)
+
+            result = self.model.predict(source=input_data,
+                                        imgsz=self.getImageSize(),
+                                        verbose=False,
+                                        conf=self.conf,
+                                        retina_masks=True,
+                                        device='cpu' #remember to remove this this is just to test test_crop.py
+                                         )
  
         computed_result = result  #[0].compute()
         all_masks = np.zeros(shape=data.shape, dtype=np.uint32)
@@ -80,7 +146,8 @@ class YoloSegmenter(AbstractSegmenter):
         
         result_masks = computed_result[0].masks
         
-        masks = result_masks.data
+        masks = result_masks.data.cpu()
+
         if data.shape[0] != self.getImageSize() or data.shape[1] != self.getImageSize():
             if masks.ndim == 2:
                 masks = masks.unsqueeze(0).unsqueeze(0)  # Now shape is (1, 1, H, W)
@@ -90,14 +157,17 @@ class YoloSegmenter(AbstractSegmenter):
             masks = scale_masks(masks, result_masks.orig_shape)
             masks = masks.squeeze(0)
         
-        masks = masks.cpu().numpy()
-        segments = computed_result[0].masks.shape[0]
+        masks = masks.numpy()
+
+        clean_masks = get_clean_masks(masks)
+        segments = clean_masks.shape[0]
         
         sh1 = all_masks.shape[0]
         sh2 = all_masks.shape[1]
 
         for n in range(segments):
-            res = masks[n]
+            #res = masks[n]
+            res = clean_masks[n]
             mask = res.astype("uint32") * self.intGen.getNext()
             all_masks[:sh1, :sh2] = np.where(all_masks[:sh1, :sh2] == 0, mask[:sh1, :sh2], all_masks[:sh1, :sh2])
 
@@ -112,38 +182,14 @@ class LargeImageSegmenter:
         random.seed()
         self.tableOfIds = id_table.EquivalenceList()
 
-    # def isotrophic_opening(radius,chunk):
-    #     bin_chunk = (chunk > 0)
-    #     interm = skimage.morphology.isotropic_opening(bin_chunk,radius)
-    #     idxs = np.where(interm != 0)
-    #     l_chunk = np.zeros(chunk.shape, dtype=chunk.dtype)  # Create array with correct dtype
-    #     l_chunk[idxs] = chunk[idxs]
-    #     return l_chunk
-
-    # def area_opening(chunk):
-    #     bin_chunk = (chunk > 0)
-    #     interm = skimage.morphology.area_opening(bin_chunk)
-    #     idxs = np.where(interm != 0)
-    #     l_chunk = np.zeros(chunk.shape, dtype=chunk.dtype)  # Create array with correct dtype
-    #     l_chunk[idxs] = chunk[idxs]
-    #     return l_chunk
-
-    # def calculate_dynamic_overlap(large_image_size, ann_size):
-    #     n_s = large_image_size // ann_size
-    #     rests = large_image_size % ann_size
-    #     pixels_for_next_square = ann_size-rests
-    #     overlap_to_distribute = pixels_for_next_square / (n_s+1)
-        
-    #     return overlap_to_distribute/2
-
     def caclulate_neighbour_equivalence_ids(self,data, block_id, img_size, scan_vertical, scan_far_side = False):
 
         print(f"calulating eq ids from {block_id}")
         x = 1 if not scan_far_side else data.shape[0] #img_size
         y = 1 if not scan_far_side else data.shape[1]
-        
+
         neighbour_mod = -1 if not scan_far_side else 1
-        
+
         if scan_vertical:
             neighbour_coords_mod = (neighbour_mod,0)
             scan_size = data.shape[1]
@@ -167,7 +213,7 @@ class LargeImageSegmenter:
             if id_local != 0 and id_neighbour != 0 and id_neighbour != id_local:
                 connected_table[id_local][id_neighbour] += 1
                 max_neighbour_local_table[id_neighbour][id_local] += 1
-                
+
         #only keep the maximum values per neighbour
         neighbour_max = {}
         for outer_key in max_neighbour_local_table:
@@ -175,7 +221,7 @@ class LargeImageSegmenter:
             nid = max_neighbour_local_table[outer_key]
             nid = {k: v for k, v in nid.items() if v == max(nid.values())}
             neighbour_max[outer_key] = list(nid.keys())[0]
-                    
+
         for n in neighbour_max:
             loc = neighbour_max[n]
             for ll in connected_table:
@@ -191,7 +237,7 @@ class LargeImageSegmenter:
                 if value > max_cnt:
                     max_cnt = value
                     filtered[idx] = (outer_key,inner_key)
-                    
+
         #merge data in local and neighbour structures
         for (ll, n) in filtered:
             id_l = ll
@@ -282,7 +328,7 @@ class LargeImageSegmenter:
         end = timer()
         
         print("stopping: ",end - start)
-        
+
         if clearBorders:
             print("Clearing borders")
             result = skimage.segmentation.clear_border(result)

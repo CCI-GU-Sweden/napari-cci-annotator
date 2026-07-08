@@ -215,7 +215,8 @@ class CciAnnotatorQWidget(QWidget):
         self.overlap_slider = QSpinBox()
         self.overlap_slider.setMinimum(100)
         self.overlap_slider.setMaximum(500)
-        self.overlap_slider.setValue(200)
+        #Changed default from 200 to 100 
+        self.overlap_slider.setValue(100)
         sliderLayout.addRow("Overlap:", self.overlap_slider)
 
         self.crop_segment_check = QCheckBox()
@@ -588,6 +589,7 @@ class CciAnnotatorQWidget(QWidget):
             )
         except FileNotFoundError as e:
             QMessageBox.information(None, "Model not found", "Change the model path in settings.\n")
+            print(cell_type_name, res, future)
             return
         
         if not res or not future:

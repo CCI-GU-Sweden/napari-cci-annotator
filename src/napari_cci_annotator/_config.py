@@ -11,7 +11,7 @@ AXON_MODEL_FILENAME = "axon_model_20250512.pt"
 AXON_MODEL_PATH = 'axons/' + AXON_MODEL_FILENAME
 #AXON_MODEL_NAME = "stardist"
 
-UNAXON_MODEL_FILENAME = "unaxon_model_1125.pt"
+UNAXON_MODEL_FILENAME = "unaxon_model_1126.pt"
 UNAXON_MODEL_PATH = 'unmyelinated_axons/' + UNAXON_MODEL_FILENAME
 
 
@@ -21,8 +21,14 @@ OPENVINO_MYELIN_MODEL_PATH = 'myelin/' + OPENVINO_MYELIN_MODEL_DIR_NAME
 OPENVINO_AXON_MODEL_DIR_NAME = "axon_model_20250512_openvino_model/"
 OPENVINO_AXON_MODEL_PATH = 'axons/' + OPENVINO_AXON_MODEL_DIR_NAME
 
-OPENVINO_UNAXON_MODEL_DIR_NAME = "unaxon_model_1125_openvino_model/"
+OPENVINO_UNAXON_MODEL_DIR_NAME = "unaxon_model_1126_openvino_model/"
 OPENVINO_UNAXON_MODEL_PATH = 'unmyelinated_axons/' + OPENVINO_UNAXON_MODEL_DIR_NAME
+
+MODEL_CONFIDENCE = {
+    "myelin": 0.25,
+    "axons": 0.25,
+    "unmyelinated axons": 0.5,
+}
 
 AXON_IMG_SIZE = 1024
 MYELIN_IMG_SIZE = 1024
@@ -31,6 +37,15 @@ UNAXON_IMG_SIZE = 1024
 OPENVINO_BACKEND_PREFIX = "OpenVINO"
 OPENVINO_BACKEND_GPU = OPENVINO_BACKEND_PREFIX + "-GPU"
 OPENVINO_BACKEND_CPU = OPENVINO_BACKEND_PREFIX + "-CPU"
+
+def get_conf(cell_type:str) -> float:
+    cell_type_low = cell_type.lower()
+    if cell_type_low == "axons":
+        return MODEL_CONFIDENCE["axons"]
+    elif cell_type_low == "unmyelinated axons":
+        return MODEL_CONFIDENCE["unmyelinated axons"]
+    else:
+        return MODEL_CONFIDENCE["myelin"]
 
 
 def get_image_size(cell_type: str) -> int:
