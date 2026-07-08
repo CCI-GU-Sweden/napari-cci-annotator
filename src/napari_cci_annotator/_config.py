@@ -27,7 +27,7 @@ OPENVINO_UNAXON_MODEL_PATH = 'unmyelinated_axons/' + OPENVINO_UNAXON_MODEL_DIR_N
 MODEL_CONFIDENCE = {
     "myelin": 0.25,
     "axons": 0.25,
-    "unmyelinated axons": 0.5,
+    "unmyelinated axons": 0.4,
 }
 
 AXON_IMG_SIZE = 1024

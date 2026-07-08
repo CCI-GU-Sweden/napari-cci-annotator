@@ -121,22 +121,22 @@ class YoloSegmenter(AbstractSegmenter):
             input_data = np.ascontiguousarray(rgb_data)
 
             #Remember to remove just debugging now
-            debug_dir = Path("/home/noema/code/gisela_workflow/debug_tiles")
-            debug_dir.mkdir(exist_ok=True)
+            #debug_dir = Path("/home/noema/code/gisela_workflow/debug_tiles")
+            #debug_dir.mkdir(exist_ok=True)
 
             #imsave(
             #    debug_dir / f"tile_{block_id}.png",
             #    data.astype(np.uint8)
             #)
 
-            np.save(debug_dir / f"tile_{block_id}.npy", data)
+            #np.save(debug_dir / f"tile_{block_id}.npy", data)
 
             result = self.model.predict(source=input_data,
                                         imgsz=self.getImageSize(),
                                         verbose=False,
                                         conf=self.conf,
                                         retina_masks=True,
-                                        device='cpu' #remember to remove this this is just to test test_crop.py
+                                        #device='cpu' #remember to remove this this is just to test test_crop.py
                                          )
  
         computed_result = result  #[0].compute()
