@@ -133,8 +133,37 @@ def morpho_data_generator(myelin_label_image, axon_label_image, data_image):
         print(f"calculated {totCnt}:th morphometric!")
         totCnt += 1
         yield get_morphos_for_label_data(myelin_lbl,myelin_bw, axon_lbl_crop, axon_bw_crop, img_data, axon_max_label, min_r, min_c)
-        
-        
+
+
+def unaxon_morpho_data_generator(unaxon_label_image, data_image):
+    properties = ['label', 'bbox', 'image', 'centroid']
+
+    reg_table = regionprops_table(label_image=unaxon_label_image,
+                                  properties=properties)
+
+    num_labels = len(np.unique(unaxon_label_image)) - 1
+    print(f"Number of labels in layer: {len(reg_table['label'])} or {num_labels}")
+
+    yield num_labels
+
+    reg_table = pd.DataFrame(reg_table)
+    totCnt = 0
+
+    for _, row in reg_table.iterrows():
+
+        min_r = row['bbox-0']
+        min_c = row['bbox-1']
+        max_r = row['bbox-2']
+        max_c = row['bbox-3']
+
+        unaxon_lbl = copy.copy(unaxon_label_image[min_r:max_r, min_c:max_c])
+        unaxon_bw = row['image']
+        img_data = data_image[min_r:max_r, min_c:max_c]
+
+        print(f"calculated {totCnt}:th morphometric!")
+        totCnt += 1
+        yield get_morphos_for_unaxon_label_data(unaxon_lbl, unaxon_bw, img_data, min_r, min_c)
+
 def auto_calculate_axon_region(myelin_bw_fill, myelin_bw):
     auto_axon_region = np.logical_xor(myelin_bw_fill,myelin_bw)
     if np.sum(auto_axon_region) >= 100:
@@ -295,10 +324,90 @@ def get_morphos_for_axon_label_data(axon_bw_img, axon_lbl_img, obj_table, axon_m
 
     return obj_table
 
-            
+def get_morphos_for_unaxon_label_data(
+    unaxon_lbl,
+    unaxon_bw,
+    img_data,
+    x_offset=0,
+    y_offset=0,
+):
+    pad_size = 5
+
+    # Keep only the current unaxon object
+    unaxon_lbl[np.logical_not(unaxon_bw)] = 0
+
+    properties = [
+        "label",
+        "area",
+        "eccentricity",
+        "solidity",
+        "intensity_mean",
+        "axis_minor_length",
+        "axis_major_length",
+        "feret_diameter_max",
+        "centroid",
+    ]
+
+    props_table = regionprops_table(
+        label_image=unaxon_lbl,
+        intensity_image=img_data,
+        properties=properties,
+    )
+
+    obj_table = pd.DataFrame(props_table)
+
+    obj_table.rename(
+        columns={
+            "label": "unaxon_label",
+            "area": "unaxon_area",
+            "eccentricity": "unaxon_eccentricity",
+            "solidity": "unaxon_solidity",
+            "intensity_mean": "unaxon_intensity_mean",
+            "axis_minor_length": "unaxon_axis_minor_length",
+            "axis_major_length": "unaxon_axis_major_length",
+            "feret_diameter_max": "unaxon_feret_diameter_max",
+        },
+        inplace=True,
+    )
+
+    obj_table["status_ok"] = True
+    obj_table["error_msg"] = ""
+
+    if obj_table.empty:
+        return obj_table
+
+    obj_table["center_x"] = props_table["centroid-0"] + x_offset
+    obj_table["center_y"] = props_table["centroid-1"] + y_offset
+
+    unaxon_bw_fill = ndimage.binary_fill_holes(unaxon_bw)
+
+    unaxon_bw_pad = np.pad(
+        unaxon_bw_fill,
+        ((pad_size, pad_size), (pad_size, pad_size)),
+        mode="constant",
+        constant_values=0,
+    )
+
+    try:
+        _, unaxon_box_edges, _ = bbox_from_BWimg(unaxon_bw_pad)
+
+        obj_table["unaxon_feret_max"] = np.max(unaxon_box_edges)
+        obj_table["unaxon_feret_min"] = np.min(unaxon_box_edges)
+        obj_table["unaxon_AR"] = (
+            np.max(unaxon_box_edges) / np.min(unaxon_box_edges)
+        )
+
+    except Exception as e:
+        obj_table["unaxon_feret_max"] = 0
+        obj_table["unaxon_feret_min"] = 0
+        obj_table["unaxon_AR"] = 0
+        obj_table["status_ok"] = False
+        obj_table["error_msg"] = str(e)
+
+    return obj_table
+
     
 def create_morpho_table_from_data(name, myelin_label_image, axon_label_image, data_image):
-
 
     total_table = pd.DataFrame()
     tot_cnt = 0

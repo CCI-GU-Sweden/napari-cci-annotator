@@ -64,6 +64,7 @@ class CciAnnotatorQWidget(QWidget):
         self.cell_type_selector.addItem("Myelin")
         self.cell_type_selector.addItem("Axons")
         self.cell_type_selector.addItem("Unmyelinated axons")
+
         self.layout().addWidget(self.backend_label)
         self.layout().addWidget(self.backend_selector)
 
@@ -141,6 +142,9 @@ class CciAnnotatorQWidget(QWidget):
         )
 
         read_ann_btn = QPushButton("Read annotations")
+        self.morpho_type_selector = QComboBox()
+        self.morpho_type_selector.addItems(["Myelin", "Unmyelinated axons"])
+        mainLayout.addWidget(self.morpho_type_selector)
         read_ann_btn.clicked.connect(self._on_read_ann_btn_click)
 
         mainLayout.addWidget(read_ann_btn)
@@ -626,9 +630,14 @@ class CciAnnotatorQWidget(QWidget):
         self.viewer.camera.zoom = desired_zoom_level
 
         # select the label in the contros
-        l_layer = self._get_first_labels_layer_by_cell_type_if_any("myelin")
-        if not l_layer:
-            return
+        if self.morpho_type_selector.currentText() == "Unmyelinated axons":
+            l_layer = self._get_first_labels_layer_by_cell_type_if_any(
+                "unmyelinated"
+            )
+        else:
+            l_layer = self._get_first_labels_layer_by_cell_type_if_any(
+                "myelin"
+            )
 
         label = self.ann_handler.get_label_for_row(index.row())
         l_layer.selected_label = label
@@ -641,14 +650,19 @@ class CciAnnotatorQWidget(QWidget):
         labelindex = self.annotations_view.currentIndex()
         label_to_delete = self.ann_handler.get_label_for_row(labelindex.row())
 
-        label_layer = self._get_first_labels_layer_if_any()
+        if self.morpho_type_selector.currentText() == "Unmyelinated axons":
+            label_layer = self._get_first_labels_layer_by_cell_type_if_any(
+                "unmyelinated"
+            )
+        else:
+            label_layer = self._get_first_labels_layer_by_cell_type_if_any(
+                "myelin"
+            )
         if not label_layer:
             self.show_message_box(
                 "No labels layer", "No labels layer available"
             )
             return False
-
-        # labels_layer = viewer.layers['my_labels_layer']
 
         # Modify the layer's data to remove the specific label
         label_layer.data[label_layer.data == label_to_delete] = 0
@@ -676,9 +690,8 @@ class CciAnnotatorQWidget(QWidget):
     def show_message_box(self, title, msg):
         QMessageBox.information(None, title, msg, buttons=QMessageBox.Ok)
 
-    def _check_layers_for_morpho(self):
-        if (
-            self._count_label_layers_by_cell_type("myelin") != 1
+    def _check_myelinated_layers_for_morpho(self):
+        if (self._count_label_layers_by_cell_type("myelin") != 1
             or self._count_label_layers_by_cell_type("axon") != 1
         ):
             self.show_message_box(
@@ -712,15 +725,50 @@ class CciAnnotatorQWidget(QWidget):
 
         return True, myelin_label_layer, axon_label_layer, image_layer
 
+
+    def _check_unaxon_layers_for_morpho(self):
+        if (self._count_label_layers_by_cell_type("unmyelinated axons") != 1
+        ):
+            self.show_message_box(
+                "Wrong number of layers",
+                "Make sure there is a unmyelinated axons layer\nDelete all unwanted label layers and try again.",
+            )
+            return False, None, None, None
+
+        unaxon_label_layer = self._get_first_labels_layer_by_cell_type_if_any(
+            "unmyelinated axons"
+        )
+        if not unaxon_label_layer:
+            self.show_message_box(
+                "No myelin labels layer", "No myelin labels layer available"
+            )
+            return False, None, None, None
+
+        image_layer = self._get_first_image_layer_if_any()
+        if not image_layer:
+            self.show_message_box("No image layer", "No image layer available")
+            return False, None, None, None
+
+        return True, unaxon_label_layer, image_layer
+
     def _on_read_ann_btn_click(self):
         print("BUTTON PRESSED")
 
+        morpho_type = self.morpho_type_selector.currentText().lower()
+
+        if morpho_type == "myelin":
+            self._read_myelinated_annotations()
+
+        if morpho_type == "unmyelinated axons":
+            self._read_unmyelinated_annotations()
+
+    def _read_myelinated_annotations(self):
         print("All layers:")
         for layer in self.viewer.layers:
             print(layer.name, type(layer), layer.data.shape, layer.data.dtype)
 
-        res, myelin_label_layer, axon_label_layer, image_layer = (
-            self._check_layers_for_morpho()
+        res, myelin_label_layer, axon_label_layer, image_layer = ( #No unaxon
+            self._check_myelinated_layers_for_morpho()
         )
 
         print("check results:", res)
@@ -755,9 +803,48 @@ class CciAnnotatorQWidget(QWidget):
         future.add_done_callback(f_cb)
         self.show_progress_dialog("Adding annotations...", "cancel")
 
+    def _read_unmyelinated_annotations(self):
+        print("All layers:")
+        for layer in self.viewer.layers:
+            print(layer.name, type(layer), layer.data.shape, layer.data.dtype)
+
+        res, unaxon_label_layer, image_layer = ( #No unaxon
+            self._check_unaxon_layers_for_morpho()
+        )
+
+        print("check results:", res)
+        print("unmyelinated layer:", unaxon_label_layer)
+        print("image layer:", image_layer.name)
+
+        future = self.ann_handler.add_unaxon_annotations_to_model(
+            unaxon_label_layer.data,
+            image_layer.data,
+            self._update_progress_callback,
+        )
+
+        print("future:", future)
+
+        def debug_done(f):
+            print("future done")
+            print("Exception:", f.exception())
+            print("Annotations", self.ann_handler.count())
+
+        future.add_done_callback(debug_done)
+
+        def onFinished():
+            return (
+                    self.annotations_view.setEnabled(self.ann_handler.count() > 0),
+                    self.del_ann_btn.setEnabled(True),
+                    self.save_morpho_btn.setEnabled(True),
+                )
+
+        f_cb = partial(self._future_done_callback, extra_func=onFinished)
+        future.add_done_callback(f_cb)
+        self.show_progress_dialog("Adding annotations...", "cancel")
+
     def _on_morphometrics_clicked(self):
         res, myelin_label_layer, axon_label_layer, image_layer = (
-            self._check_layers_for_morpho()
+            self._check_myelinated_layers_for_morpho()
         )
         if not res:
             return False

@@ -5,7 +5,7 @@ from qtpy.QtCore import QSortFilterProxyModel, Qt
 from qtpy.QtGui import QStandardItem, QStandardItemModel
 from qtpy.QtWidgets import QApplication, QStyle
 
-from .morphometrics import create_morpho_table_from_data, morpho_data_generator
+from .morphometrics import morpho_data_generator, unaxon_morpho_data_generator
 
 
 class NumericSortProxyModel(QSortFilterProxyModel):
@@ -31,27 +31,61 @@ class AnnotationsHandler:
     def model(self):
         return self._proxy_model
 
-    def set_headers(self):
-        # self._ann_model.setColumnCount(6)
-        self.model().setHeaderData(
-            0, Qt.Horizontal, "Myelin id", Qt.DisplayRole
-        )
-        self.model().setHeaderData(1, Qt.Horizontal, "Axon id", Qt.DisplayRole)
-        self.model().setHeaderData(2, Qt.Horizontal, "X coord")
-        self.model().setHeaderData(3, Qt.Horizontal, "Y coord")
-        self.model().setHeaderData(4, Qt.Horizontal, "Area (px)")
-        self.model().setHeaderData(5, Qt.Horizontal, "# parts")
-        self.model().setHeaderData(6, Qt.Horizontal, "Axon area")
-        self.model().setHeaderData(7, Qt.Horizontal, "Axon calcu.")
-        self.model().setHeaderData(8, Qt.Horizontal, "status")
+    def set_headers(self, morpho_type='myelin'):
+        if morpho_type == "unmyelinated":
+            headers = [
+                "Unaxon id",
+                "X coord",
+                "Y coord",
+                "Area (px)",
+                "status",
+            ]
+        else:
+            headers = [
+                "Myelin id",
+                "Axon id",
+                "X coord",
+                "Y coord",
+                "Area (px)",
+                "# parts",
+                "Axon area",
+                "Axon calcu.",
+                "status",
+            ]
 
-    def clear_model(self):
+        self._ann_model.setColumnCount(len(headers))
+
+        for column, header in enumerate(headers):
+            self._ann_model.setHeaderData(
+                column,
+                Qt.Horizontal,
+                header,
+            )
+
+    def clear_model(self, morpho_type="myelinated"):
         self._ann_model.clear()
-        #self._proxy_model.clear()
-        self.set_headers()
+        self.set_headers(morpho_type)
 
     def count(self):
         return self._ann_model.rowCount()
+
+    def add_unaxon_annotations_to_model(
+            self,
+            unaxon_label_image,
+            data_image,
+            napariViewer,
+
+
+    ):
+        future = self.executor.submit(
+            self._add_unaxon_annotations,
+            unaxon_label_image,
+            data_image,
+            napariViewer,
+
+
+        )
+        return future
 
     def add_annotations_to_model(
         self, myelin_label_image, axon_label_image, data_image, napariViewer
@@ -146,6 +180,73 @@ class AnnotationsHandler:
                 progress_update_cb(cnt, tot_nr_labels)
 
         self.set_headers()
+
+    def _add_unaxon_annotations(
+            self,
+            unaxon_label_image,
+            data_image,
+            progress_update_cb=None,
+    ):
+        self.clear_model("unmyelinated")
+
+        style = QApplication.style()
+
+        gen = unaxon_morpho_data_generator(
+            unaxon_label_image,
+            data_image,
+        )
+
+        tot_nr_labels = next(gen)
+        cnt = 0
+
+        for data in gen:
+            if data.empty:
+                continue
+
+            items = []
+
+            label = data["unaxon_label"][0]
+
+            label_item = QStandardItem(str(label))
+            label_item.setData(label, Qt.UserRole + 1)
+
+            label_item.setData(data, Qt.UserRole + 2)
+
+            items.append(label_item)
+
+            area = data["unaxon_area"][0]
+            area_item = QStandardItem(str(area))
+            area_item.setData(area, Qt.UserRole + 1)
+            items.append(area_item)
+
+            x = data["center_x"][0]
+            x_item = QStandardItem(str(x))
+            x_item.setData(x, Qt.UserRole + 1)
+            items.append(x_item)
+
+            y = data["center_y"][0]
+            y_item = QStandardItem(str(y))
+            y_item.setData(y, Qt.UserRole + 1)
+            items.append(y_item)
+
+            status_item = QStandardItem("")
+
+            if not data["status_ok"][0]:
+                status_item.setIcon(
+                    style.standardIcon(QStyle.SP_MessageBoxWarning)
+                )
+                status_item.setToolTip(data["error_msg"][0])
+
+            items.append(status_item)
+
+            self._ann_model.appendRow(items)
+
+            cnt += 1
+
+            if progress_update_cb:
+                progress_update_cb(cnt, tot_nr_labels)
+
+        self.set_headers("unmyelinated")
 
     def get_label_for_row(self, row):
         idx = self._proxy_model.index(row, 0)
