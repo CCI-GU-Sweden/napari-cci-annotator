@@ -257,7 +257,9 @@ def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_dat
         obj_table['myelin_feret_min'] = np.min(myelin_min_box_edges)
         obj_table['myelin_AR'] = np.max(myelin_min_box_edges)/np.min(myelin_min_box_edges)
         # calculating myelin median width
-        obj_table['myelin_width'] = morpho.get_width(myelin_bw)
+        obj_table['myelin_width'] = morpho.get_width(myelin_bw)[0]
+        obj_table['myelin_q25'] = morpho.get_width(myelin_bw)[1]
+        obj_table['myelin_q75'] = morpho.get_width(myelin_bw)[2]
     except Exception as e:
         obj_table['status_ok'] = False
         obj_table['error_msg'] = str(e)
