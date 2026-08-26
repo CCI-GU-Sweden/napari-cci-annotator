@@ -1,7 +1,4 @@
-
 import concurrent.futures
-
-#from ast import Tuple
 import numpy as np
 from napari import layers
 from qtpy.QtCore import QDir, QModelIndex
@@ -9,10 +6,7 @@ from qtpy.QtWidgets import QFileSystemModel
 from skimage import color, io
 from ultralytics import YOLO
 import napari_cci_annotator._config as _config
-from . import _settigns
-from .morphometrics import create_morpho_table_from_data
 from .segment_large_image_using_yolo import LargeImageSegmenter, YoloSegmenter, get_clean_masks
-from skimage.measure import label, regionprops, find_contours
 
 
 
@@ -57,11 +51,7 @@ class ImageHandler:
         aIdx = self.annFileModel.index(imgIndex.row(), imgIndex.col(), self.annRootIndex)
         return aIdx
     
-    # def getCurrentImageData(self):
-    #        return self.imgFileModel.data(self.currentImgIndex)
-    
     def getImgIndexForFileName(self, fileName):
-        #p = self.imgFileModel.rootPath()
         return self.imgFileModel.index(fileName)
     
     def getAnnIndexForFileName(self, fileName):
@@ -118,10 +108,6 @@ class ImageHandler:
             return False
         self.saveAnnotationName(ann_layer_name, napariViewer)
         
-        # annLayer = napariViewer.layers[ann_layer_name]
-        # io.imsave(self.annFileModel.rootPath() + "/" + img_layer_name, annLayer.data)
-        # return True
-
     def nextImageIndex(self, imgIndex):
         nextIdx = None
         if not imgIndex or not imgIndex.isValid():
@@ -145,42 +131,12 @@ class ImageHandler:
         rDir.cdUp()
         return self.setAnnRootPath(rDir.absoluteFilePath("annotations"))
     
-    # def getModelPath(self, cell_type, backend):
-    #     cell_type_low = cell_type.lower()
-        
-    #     if cell_type_low != "axons" and cell_type_low != "myelin" and cell_type_low != "unmyelinated axons":
-    #         return False, None
-        
-    #     rdir = os.path.dirname(os.path.realpath(__file__))
-        
-    #     model_file_path = rdir + '/' + _config.MODELS_DIR + '/' + cell_type_low + '/'
-        
-    #     if backend.startswith(_config.OPENVINO_BACKEND_PREFIX):
-    #         if cell_type_low == "axons":
-    #             model_file_path += _config.OPENVINO_AXON_MODEL_DIR_NAME
-    #         elif cell_type_low == "unmyelinated axons":
-    #             model_file_path += _config.OPENVINO_UNAXON_MODEL_DIR_NAME
-    #         else:
-    #             model_file_path += _config.OPENVINO_MYELIN_MODEL_DIR_NAME
-    #     else:
-    #         if cell_type_low == "axons":
-    #             model_file_path += _config.AXON_MODEL_FILENAME
-    #         elif cell_type_low == "unmyelinated_axons":
-    #             model_file_path += _config.UNAXON_MODEL_FILENAME
-    #         else:
-    #             model_file_path += _config.MYELIN_MODEL_FILENAME
-            
-    #     return True, model_file_path
-    
     def getDataToAnnotate(self, imgIndex):
         img = self.getImgData(imgIndex)
         imgData = io.imread(self.imgFileModel.rootPath() + "/" + img)
         rgb_data = color.gray2rgb(imgData)
         return rgb_data
     
-    def getLayerToAnnotate(self, napariViewer):
-        pass
-        
     def autoAnnotateImage(self, imgIndx, napariViewer, cell_type, backend, labels_layer=None):
         _, model_file_path = _config.get_model_path(cell_type, backend)
         if not model_file_path:
@@ -249,15 +205,3 @@ class ImageHandler:
             annLayer = napariViewer.layers[annLayerName]
             napariViewer.layers.remove(annLayer)
         self.annFileModel.remove(index)
-
-    def calulate_morphometrics(self, name, myelin_label_layer, axon_label_layer, image_layer):
-
-        future = self.executor.submit(
-            create_morpho_table_from_data,
-            name,
-            myelin_label_layer,
-            axon_label_layer,
-            image_layer,
-        )
-
-        return future

@@ -1,17 +1,13 @@
 from skimage.morphology import remove_small_objects, isotropic_erosion
-from time import sleep
-from IPython.display import clear_output
 from skimage.morphology import convex_hull_image
 from skimage.measure import find_contours
 from scipy import ndimage
 
 import myelin_morphometrics as morpho
 import warnings
-from skimage.measure import label, regionprops_table
+from skimage.measure import regionprops_table
 import pandas as pd
-from skimage.color import label2rgb
 import numpy as np
-import xlsxwriter
 import copy
 from .segment_large_image_using_yolo import IntGenerator
 
@@ -208,8 +204,6 @@ def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_dat
         obj_table['nr_of_parts'] = obj_table.axes[0]
         obj_table['status_ok'] = False
         obj_table['error_msg'] = "More than one part"
-        # yield obj_table
-        # continue
         return obj_table
     
     #TODO: do this in rename above?
@@ -219,12 +213,9 @@ def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_dat
     # Create the padded myelin_bw image to avoid edge effects in the contours
     myelin_bw_fill = ndimage.binary_fill_holes(myelin_bw)
 
-    debug = False
     if axon_bw is None:
         axon_region = auto_calculate_axon_region(myelin_bw_fill,myelin_bw)
-        #debug = True
         obj_table['axon_calculation'] = "Automatic"
-        #print("no axon here")
     else:
         obj_table['axon_calculation'] = "Annotation"
         axon_region = axon_bw
@@ -238,7 +229,7 @@ def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_dat
         
         
     else:
-        axon_table = get_morphos_for_axon_label_data(axon_region,axon_lbl,obj_table, axon_max_label,pad_size)
+        get_morphos_for_axon_label_data(axon_region,axon_lbl,obj_table, axon_max_label,pad_size)
         
     if not obj_table['status_ok'][0]:
         return obj_table
@@ -290,7 +281,7 @@ def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_dat
 
 axon_id_generator = IntGenerator()
 
-def get_morphos_for_axon_label_data(axon_bw_img, axon_lbl_img, obj_table, axon_max_label, pad_size = 5, debug = False):
+def get_morphos_for_axon_label_data(axon_bw_img, axon_lbl_img, obj_table, axon_max_label, pad_size = 5):
 
     # # I do not expect holes in the axon image
     if axon_lbl_img is None:
@@ -408,33 +399,4 @@ def get_morphos_for_unaxon_label_data(
 
     return obj_table
 
-    
-def create_morpho_table_from_data(
-    name,
-    myelin_label_image,
-    axon_label_image,
-    data_image,
-):
-    total_table = pd.DataFrame()
-
-    generator = morpho_data_generator(
-        myelin_label_image,
-        axon_label_image,
-        data_image,
-    )
-
-    next(generator)
-
-    for data in generator:
-        total_table = pd.concat(
-            [total_table, data],
-            axis=0,
-            ignore_index=True,
-        )
-
-    total_table.to_excel(
-        name,
-        index=False,
-        engine="xlsxwriter",
-    )
 

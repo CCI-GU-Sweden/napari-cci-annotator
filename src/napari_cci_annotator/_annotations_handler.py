@@ -32,6 +32,7 @@ class AnnotationsHandler:
         return self._proxy_model
 
     def set_headers(self, morpho_type='myelin'):
+        self._morpho_type = morpho_type
         if morpho_type == "unmyelinated":
             headers = [
                 "Unaxon id",
@@ -62,7 +63,7 @@ class AnnotationsHandler:
                 header,
             )
 
-    def clear_model(self, morpho_type="myelinated"):
+    def clear_model(self, morpho_type="myelin"):
         self._ann_model.clear()
         self.set_headers(morpho_type)
 
@@ -115,8 +116,6 @@ class AnnotationsHandler:
             myelin_label_image, axon_label_image, data_image
         )
         tot_nr_labels = next(gen)
-        # for i in range(20):
-        #     data = next(gen)
         for data in gen:
             if data.empty:
                 continue
@@ -253,13 +252,19 @@ class AnnotationsHandler:
         return float(self._proxy_model.data(idx))
 
     def get_coordinates_for_row(self, row):
-        x_idx = self._proxy_model.index(row, 2)
-        y_idx = self._proxy_model.index(row, 3)
-        xc = float(self._proxy_model.data(x_idx))
-        yc = float(self._proxy_model.data(y_idx))
+        if self._morpho_type == "unmyelinated":
+            x_col, y_col = 1, 2
+        else:
+            x_col, y_col = 2, 3
 
-        return (xc, yc)
+        x_idx = self._proxy_model.index(row, x_col)
+        y_idx = self._proxy_model.index(row, y_col)
 
+        return (
+            float(self._proxy_model.data(x_idx)),
+            float(self._proxy_model.data(y_idx)),
+        )
+    
     def get_status_msg_for_row(self, row):
         idx = self._proxy_model.index(row, 6)
         return str(self._proxy_model.data(idx))

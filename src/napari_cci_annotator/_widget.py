@@ -2,7 +2,6 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
-from magicgui import magic_factory
 from napari import layers
 from napari.utils.notifications import show_info
 from qtpy.QtCore import QItemSelectionModel, Qt, Signal
@@ -38,8 +37,6 @@ if TYPE_CHECKING:
 
 
 class CciAnnotatorQWidget(QWidget):
-    # your QWidget.__init__ can optionally request the napari viewer instance
-    # use a type annotation of 'napari.viewer.Viewer' for any parameter
 
     add_labels_signal = Signal(np.ndarray, str)
     close_progress_signal = Signal()
@@ -82,7 +79,6 @@ class CciAnnotatorQWidget(QWidget):
         self.tabWidget.addTab(self._createSettingsTab(), "Settings")
         self.tabWidget.currentChanged.connect(self._currentTabChanged)
 
-        self.annotationInProgress = False
         self.imgHandler = _image_handler.ImageHandler()
         self.img_file_view.setModel(self.imgHandler.getImgModel())
         self.ann_file_view.setModel(self.imgHandler.getAnnModel())
@@ -97,7 +93,6 @@ class CciAnnotatorQWidget(QWidget):
         self.imgDirSet = False
         self.annDirSet = False
 
-        # self._setup_ann_menu()
         self.ann_file_view.setContextMenuPolicy(Qt.CustomContextMenu)
         self.ann_file_view.customContextMenuRequested.connect(
             self._show_context_menu
@@ -119,12 +114,6 @@ class CciAnnotatorQWidget(QWidget):
         self.progress_dialog = QProgressDialog("", "", 0, 0)
         self.progress_dialog.setAutoClose(True)
         self.progress_dialog.reset()
-
-        # #DEBUG STUFF!!!!
-        # idir = "/home/xfolka/Projects/gisela_workflow/dl/myelin/images"
-        # self.set_image_directory(idir, False)
-        # adir = "/home/xfolka/Projects/gisela_workflow/dl/myelin/annotations"
-        # self.set_ann_directory(adir)
 
     def _createMetricsTab(self):
         mainWidget = QWidget()
@@ -195,13 +184,9 @@ class CciAnnotatorQWidget(QWidget):
         self.grid_size_spinbox.setValue(
             self.NETWORK_IMG_SIZE - (2 * self.overlap_slider.value())
         )
-        # self.cols_spinbox = QSpinBox()
-        # self.cols_spinbox.setRange(1, 100)
 
         layout.addWidget(QLabel("Grid Size:"), 1, 0, Qt.AlignTop)
         layout.addWidget(self.grid_size_spinbox, 1, 1, Qt.AlignTop)
-        # layout.addWidget(QLabel("Columns:"), 1, 0)
-        # layout.addWidget(self.cols_spinbox, 1, 1)
 
         generate_button = QPushButton("Generate Grid")
         generate_button.clicked.connect(self.generate_grid)
@@ -216,21 +201,12 @@ class CciAnnotatorQWidget(QWidget):
         mainLayout.setSpacing(20)
         mainWidget.setLayout(mainLayout)
 
-        #  large_img_btn = QPushButton("Select Image")
-        #  mainLayout.addWidget(large_img_btn)
-
         sliderWidget = QWidget()
         sliderLayout = QFormLayout(sliderWidget)
-        # self.radius_slider = QSpinBox()
-        # self.radius_slider.setMinimum(1)
-        # self.radius_slider.setMaximum(20)
-        # radius_slider.setTickPosition(QSlider.TickBothSides)
-        # sliderLayout.addRow("iso opening radius:", self.radius_slider)
 
         self.overlap_slider = QSpinBox()
         self.overlap_slider.setMinimum(100)
         self.overlap_slider.setMaximum(500)
-        #Changed default from 200 to 100 
         self.overlap_slider.setValue(200)
         sliderLayout.addRow("Overlap:", self.overlap_slider)
 
@@ -248,25 +224,9 @@ class CciAnnotatorQWidget(QWidget):
 
         mainLayout.addWidget(sliderWidget)
 
-        # self.cell_label = QLabel("Select type of cell to segment")
-        # self.cell_selector = QComboBox()
-        # self.cell_selector.addItem("Myelin")
-        # self.cell_selector.addItem("Axons")
-        # mainLayout.addWidget(self.cell_label)
-        # mainLayout.addWidget(self.cell_selector)
-
         self.large_img_btn = QPushButton("Start Annotation")
         self.large_img_btn.clicked.connect(self._on_large_img_btn_clicked)
-        # large_img_btn.setEnabled(False)
         mainLayout.addWidget(self.large_img_btn)
-
-        # self.morpho_btn = QPushButton("Morphometrics")
-        # self.morpho_btn.clicked.connect(self._on_morphometrics_clicked)
-        # mainLayout.addWidget(self.morpho_btn)
-
-        self.backend_btn = QPushButton("Check AI Backend")
-        self.backend_btn.clicked.connect(self._on_backend_clicked)
-        # mainLayout.addWidget(self.backend_btn)
 
         mainLayout.insertStretch(-1, 1)
 
@@ -318,8 +278,6 @@ class CciAnnotatorQWidget(QWidget):
         self.auto_annotate_btn.clicked.connect(self._auto_annotate_clicked)
         self.auto_annotate_btn.setEnabled(False)
 
-        self.new_labels_check = QCheckBox()
-
         self.save_annotation_btn = QPushButton("Save Annotation")
         self.save_annotation_btn.clicked.connect(self._save_annotation_clicked)
         self.save_annotation_btn.setEnabled(False)
@@ -354,9 +312,6 @@ class CciAnnotatorQWidget(QWidget):
             QLabel("Automatically annotates the current image.")
         )
 
-        # mainLayout.addWidget(self.new_labels_check,7,0)
-        # mainLayout.addWidget(QLabel("Create new layer when auto annotating"))
-
         mainLayout.addWidget(self.save_annotation_btn, 7, 0)
         mainLayout.addWidget(QLabel("Saves the current annotation."))
 
@@ -375,16 +330,10 @@ class CciAnnotatorQWidget(QWidget):
         self.clear_button = QPushButton("Clear", self)
         self.clear_button.clicked.connect(self._clear_model_path)
 
-        # --- Layout ---
         mainLayout.addWidget(self.path_edit)
         mainLayout.addWidget(self.clear_button)
-        #mainLayout.setContentsMargins(4, 4, 4, 4)
-        
-        self._refreshSettings()
-        #self.setLayout(layout)
 
-        #  large_img_btn = QPushButton("Select Image")
-        #  mainLayout.addWidget(large_img_btn)
+        self._refreshSettings()
 
         return mainWidget
 
@@ -408,15 +357,11 @@ class CciAnnotatorQWidget(QWidget):
             self.settings.remove_model_path()
             self.path_edit.clear()
             self.path_edit.setPlaceholderText("No model path set")
-            #QMessageBox.information(self, "Model Path Removed", "Model path has been cleared.")
 
     def _currentTabChanged(self, index):
         self.grid_size_spinbox.setValue(
             self.NETWORK_IMG_SIZE - (2 * self.overlap_slider.value())
         )
-
-    def getRadius(self):
-        return self.radius_slider.value()
 
     def checkEnableLists(self):
         self.img_file_view.setEnabled(self.annDirSet and self.imgDirSet)
@@ -560,7 +505,6 @@ class CciAnnotatorQWidget(QWidget):
 
         msg = success_msg
         title = "Success"
-        # The task is completed
         if (
             future.done()
             and future.exception() is not None
@@ -881,50 +825,6 @@ class CciAnnotatorQWidget(QWidget):
         future.add_done_callback(f_cb)
         self.show_progress_dialog("Adding annotations...", "cancel")
 
-    def _on_morphometrics_clicked(self):
-        res, myelin_label_layer, axon_label_layer, image_layer = (
-            self._check_myelinated_layers_for_morpho()
-        )
-        if not res:
-            return False
-
-        xls_dir = QFileDialog.getExistingDirectory(
-            caption="Select morpho table directory"
-        )
-        if xls_dir == "":
-            return
-        show_info(f"Save excel file in dir: {xls_dir}")
-        fname = xls_dir + "/" + image_layer.name + "_morpho.xlsx"
-
-        # start progress diablog
-        f_cb = partial(
-            self._future_done_callback,
-            success_msg=f"Morphometrics saved in: {fname}",
-            error_msg="Exception during morphometrics",
-        )
-        pixel_size_y_nm, pixel_size_x_nm = image_layer.scale
-
-        future = self.imgHandler.calulate_morphometrics(
-            fname,
-            myelin_label_layer.data,
-            axon_label_layer.data,
-            image_layer.data,
-            pixel_size_x_nm,
-            pixel_size_y_nm,
-        )
-        future.add_done_callback(f_cb)
-        self.show_progress_dialog("working morphometrics...", "Cancel")
-
-    def _on_backend_clicked(self):
-        import napari_cci_annotator._backend_detect as backend
-
-        _, be_type = backend.select_backend()
-        QMessageBox.information(
-            None, "Detected backend", f"Detected backend is: {be_type}"
-        )
-        # else:
-        #     QMessageBox.information(None,"GPU available","GPU available for annotation!")
-
     def _on_ann_btn_click(self):
         ann_dir = QFileDialog.getExistingDirectory(
             caption="Get annotation directory"
@@ -936,7 +836,6 @@ class CciAnnotatorQWidget(QWidget):
 
     def _dbl_click_image_file(self, index):
         self._remove_all_layers()
-        # data = self.imgHandler.getImgData(index)
         self.imgHandler.loadImageAndAnnotation(index, self.viewer)
         self.save_annotation_btn.setEnabled(True)
         self.auto_annotate_btn.setEnabled(True)
@@ -1102,7 +1001,6 @@ class CciAnnotatorQWidget(QWidget):
         return
 
     def _next_annotation_clicked(self):
-        # self.imgHandler.saveAnnotation(self.img_file_view.currentIndex(),self.viewer)
         if not self._save_only_one_layer():
             return
 
