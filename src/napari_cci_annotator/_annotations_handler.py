@@ -270,23 +270,15 @@ class AnnotationsHandler:
     def _convert_morphometrics_to_nm(self, table, pixel_size_nm):
         result = table.copy()
 
-        # Measurements currently expressed in px²
         area_columns = [
-            # Myelin
             "myelin_area",
             "myelin_hole_area",
             "myelin_filled_area",
-
-            # Axon
             "axon_area",
-
-            # Unmyelinated axon
             "unaxon_area",
         ]
 
-        # Measurements currently expressed in px
         length_columns = [
-            # Myelin
             "myelin_axis_minor_length",
             "myelin_axis_major_length",
             "myelin_feret_diameter_max",
@@ -297,12 +289,8 @@ class AnnotationsHandler:
             "myelin_q75",
             "myelin_width_min_feret_direction",
             "myelin_width_max_feret_direction",
-
-            # Axon
             "axon_feret_max",
             "axon_feret_min",
-
-            # Unmyelinated axon
             "unaxon_axis_minor_length",
             "unaxon_axis_major_length",
             "unaxon_feret_diameter_max",
@@ -310,36 +298,39 @@ class AnnotationsHandler:
             "unaxon_feret_min",
         ]
 
-        # px² -> nm²
+        rename_columns = {}
+
+        if pixel_size_nm == 1:
+            for col in area_columns:
+                if col in result.columns:
+                    rename_columns[col] = f"{col}_px2"
+
+            for col in length_columns:
+                if col in result.columns:
+                    rename_columns[col] = f"{col}_px"
+
+            result.rename(columns=rename_columns, inplace=True)
+            result["pixel_size_nm_per_px"] = 1
+
+            return result
+
         for col in area_columns:
             if col in result.columns:
                 result[col] = (
                         pd.to_numeric(result[col], errors="coerce")
                         * pixel_size_nm ** 2
                 )
+                rename_columns[col] = f"{col}_nm2"
 
-        # px -> nm
         for col in length_columns:
             if col in result.columns:
                 result[col] = (
                         pd.to_numeric(result[col], errors="coerce")
                         * pixel_size_nm
                 )
-
-        rename_columns = {}
-
-        for col in area_columns:
-            if col in result.columns:
-                rename_columns[col] = f"{col}_nm2"
-
-        for col in length_columns:
-            if col in result.columns:
                 rename_columns[col] = f"{col}_nm"
 
-        result.rename(
-            columns=rename_columns,
-            inplace=True,
-        )
+        result.rename(columns=rename_columns, inplace=True)
 
         result["pixel_size_nm_per_px"] = pixel_size_nm
 

@@ -158,7 +158,7 @@ class CciAnnotatorQWidget(QWidget):
 
         read_ann_btn.clicked.connect(self._on_read_ann_btn_click)
         mainLayout.addWidget(read_ann_btn)
-        
+
         self.annotations_view.clicked.connect(self._click_annotation_id)
         self.annotations_view.activated.connect(self._click_annotation_id)
 
