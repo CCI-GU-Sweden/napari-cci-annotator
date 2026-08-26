@@ -142,12 +142,23 @@ class CciAnnotatorQWidget(QWidget):
         )
 
         read_ann_btn = QPushButton("Read annotations")
-        self.morpho_type_selector = QComboBox()
-        self.morpho_type_selector.addItems(["Myelin", "Unmyelinated axons"])
-        mainLayout.addWidget(self.morpho_type_selector)
-        read_ann_btn.clicked.connect(self._on_read_ann_btn_click)
 
+        self.morpho_type_selector = QComboBox()
+        self.morpho_type_selector.addItems(
+            ["Myelin", "Unmyelinated axons"]
+        )
+        mainLayout.addWidget(self.morpho_type_selector)
+
+        self.pixel_size_input = QLineEdit()
+        self.pixel_size_input.setText("1")
+        self.pixel_size_input.setPlaceholderText("e.g. 4.97")
+
+        mainLayout.addWidget(QLabel("Pixel size (nm/px):"))
+        mainLayout.addWidget(self.pixel_size_input)
+
+        read_ann_btn.clicked.connect(self._on_read_ann_btn_click)
         mainLayout.addWidget(read_ann_btn)
+        
         self.annotations_view.clicked.connect(self._click_annotation_id)
         self.annotations_view.activated.connect(self._click_annotation_id)
 
@@ -220,7 +231,7 @@ class CciAnnotatorQWidget(QWidget):
         self.overlap_slider.setMinimum(100)
         self.overlap_slider.setMaximum(500)
         #Changed default from 200 to 100 
-        self.overlap_slider.setValue(100)
+        self.overlap_slider.setValue(200)
         sliderLayout.addRow("Overlap:", self.overlap_slider)
 
         self.crop_segment_check = QCheckBox()
@@ -674,7 +685,28 @@ class CciAnnotatorQWidget(QWidget):
 
     def _save_morpho_xls(self):
         if self.ann_handler.count() == 0:
-            self.show_message_box("Empty", "No data to save")
+            self.show_message_box(
+                "Empty",
+                "No data to save",
+            )
+            return
+
+        try:
+            pixel_size_nm = float(
+                self.pixel_size_input.text()
+            )
+        except ValueError:
+            self.show_message_box(
+                "Invalid pixel size",
+                "Enter a valid pixel size in nm/px, for example 4.97.",
+            )
+            return
+
+        if pixel_size_nm <= 0:
+            self.show_message_box(
+                "Invalid pixel size",
+                "Pixel size must be greater than zero.",
+            )
             return
 
         fileName = QFileDialog.getSaveFileName(
@@ -682,10 +714,23 @@ class CciAnnotatorQWidget(QWidget):
             directory="./morpho_report.xlsx",
             filter="*.xlsx",
         )
-        future = self.ann_handler.generate_xls_report(fileName[0])
 
-        future.add_done_callback(self._future_done_callback)
-        self.show_progress_dialog("Saving morphometrics...", "cancel")
+        if not fileName[0]:
+            return
+
+        future = self.ann_handler.generate_xls_report(
+            fileName[0],
+            pixel_size_nm,
+        )
+
+        future.add_done_callback(
+            self._future_done_callback
+        )
+
+        self.show_progress_dialog(
+            "Saving morphometrics...",
+            "cancel",
+        )
 
     def show_message_box(self, title, msg):
         QMessageBox.information(None, title, msg, buttons=QMessageBox.Ok)
@@ -763,18 +808,12 @@ class CciAnnotatorQWidget(QWidget):
             self._read_unmyelinated_annotations()
 
     def _read_myelinated_annotations(self):
-        print("All layers:")
-        for layer in self.viewer.layers:
-            print(layer.name, type(layer), layer.data.shape, layer.data.dtype)
-
-        res, myelin_label_layer, axon_label_layer, image_layer = ( #No unaxon
+        res, myelin_label_layer, axon_label_layer, image_layer = (
             self._check_myelinated_layers_for_morpho()
         )
 
-        print("check results:", res)
-        print("myelin layer:", myelin_label_layer)
-        print("axon layer:", axon_label_layer)
-        print("image layer:", image_layer.name)
+        if not res:
+            return
 
         future = self.ann_handler.add_annotations_to_model(
             myelin_label_layer.data,
@@ -863,11 +902,15 @@ class CciAnnotatorQWidget(QWidget):
             success_msg=f"Morphometrics saved in: {fname}",
             error_msg="Exception during morphometrics",
         )
+        pixel_size_y_nm, pixel_size_x_nm = image_layer.scale
+
         future = self.imgHandler.calulate_morphometrics(
             fname,
             myelin_label_layer.data,
             axon_label_layer.data,
             image_layer.data,
+            pixel_size_x_nm,
+            pixel_size_y_nm,
         )
         future.add_done_callback(f_cb)
         self.show_progress_dialog("working morphometrics...", "Cancel")

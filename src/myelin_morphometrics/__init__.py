@@ -90,7 +90,11 @@ def get_width(BW, disk_diam=5):
     dist_on_skel = distance * skel
     w = dist_on_skel[dist_on_skel>0]
 
-    return np.median(w)*2
+    width_median = np.median(w)*2
+    width_quantile_25 = np.quantile(w, 0.25) * 2
+    width_quantile_75 = np.quantile(w, 0.75) * 2
+
+    return width_median, width_quantile_25, width_quantile_75
 
 def smoothBoundary(boundary, window_length=10, polyorder=2):
     """

@@ -4,7 +4,6 @@ import concurrent.futures
 #from ast import Tuple
 import numpy as np
 from napari import layers
-
 from qtpy.QtCore import QDir, QModelIndex
 from qtpy.QtWidgets import QFileSystemModel
 from skimage import color, io
@@ -77,18 +76,30 @@ class ImageHandler:
 
     def loadImageAndAnnotation(self, index, napariViewer):
         data = self.imgFileModel.data(index)
-        img = io.imread(self.imgFileModel.rootPath() + "/" + data)
-        napariViewer.add_image(img, name=data)
-        
+        path = self.imgFileModel.rootPath() + "/" + data
+
+        img = io.imread(path)
+
+        napariViewer.add_image(img, name=data,)
+
         idx = self.getAnnIndexForFileName(data)
+
         if idx.isValid():
-            ann = io.imread(self.annFileModel.rootPath() + "/" + data)
+            ann = io.imread(
+                self.annFileModel.rootPath() + "/" + data
+            )
         else:
-            current_image = napariViewer.layers[0]  # Assuming the image is the first layer
+            current_image = napariViewer.layers[0]
             image_shape = current_image.data.shape
-            ann = np.zeros(image_shape, dtype=current_image.dtype)
-            
-        napariViewer.add_labels(ann, name=self.getAnnotationLayerNameFromImageName(data))
+            ann = np.zeros(
+                image_shape,
+                dtype=current_image.dtype,
+            )
+
+        napariViewer.add_labels(
+            ann,
+            name=self.getAnnotationLayerNameFromImageName(data),
+        )
 
     def saveAnnotationUsingName(self, annLayerName, saveName, napariViewer):
         annLayer = napariViewer.layers[annLayerName]
@@ -190,6 +201,8 @@ class ImageHandler:
 
         masks = results[0].masks.data.cpu().numpy()
         clean_masks = get_clean_masks(masks)
+
+
         shape = clean_masks.shape
         if not labels_layer:
             all_masks = np.zeros(shape=(img_size, img_size), dtype=np.uint32)
@@ -221,8 +234,8 @@ class ImageHandler:
         selected = napariViewer.layers.selection.active
         if not selected or not isinstance(selected, layers.Image):
             return False, None
-        # Submit the task to the executor and get a Future object
         func = segmenter.segment_large_image_data
+
         if crop_image:
             func = segmenter.segment_large_image_crop_to_match_model_size
         
@@ -238,5 +251,13 @@ class ImageHandler:
         self.annFileModel.remove(index)
 
     def calulate_morphometrics(self, name, myelin_label_layer, axon_label_layer, image_layer):
-        future = self.executor.submit(create_morpho_table_from_data, name, myelin_label_layer, axon_label_layer, image_layer)
+
+        future = self.executor.submit(
+            create_morpho_table_from_data,
+            name,
+            myelin_label_layer,
+            axon_label_layer,
+            image_layer,
+        )
+
         return future

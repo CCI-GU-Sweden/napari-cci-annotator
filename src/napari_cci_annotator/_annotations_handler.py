@@ -37,7 +37,7 @@ class AnnotationsHandler:
                 "Unaxon id",
                 "X coord",
                 "Y coord",
-                "Area (px)",
+                "Area (px2)",
                 "status",
             ]
         else:
@@ -46,7 +46,7 @@ class AnnotationsHandler:
                 "Axon id",
                 "X coord",
                 "Y coord",
-                "Area (px)",
+                "Area (px2)",
                 "# parts",
                 "Axon area",
                 "Axon calcu.",
@@ -214,11 +214,6 @@ class AnnotationsHandler:
 
             items.append(label_item)
 
-            area = data["unaxon_area"][0]
-            area_item = QStandardItem(str(area))
-            area_item.setData(area, Qt.UserRole + 1)
-            items.append(area_item)
-
             x = data["center_x"][0]
             x_item = QStandardItem(str(x))
             x_item.setData(x, Qt.UserRole + 1)
@@ -228,6 +223,11 @@ class AnnotationsHandler:
             y_item = QStandardItem(str(y))
             y_item.setData(y, Qt.UserRole + 1)
             items.append(y_item)
+
+            area = data["unaxon_area"][0]
+            area_item = QStandardItem(str(area))
+            area_item.setData(area, Qt.UserRole + 1)
+            items.append(area_item)
 
             status_item = QStandardItem("")
 
@@ -267,15 +267,123 @@ class AnnotationsHandler:
     def remove_row(self, row):
         return self._proxy_model.removeRow(row)
 
-    def generate_xls_report(self, name):
-        future = self.executor.submit(self._generate_xls_report, name)
+    def _convert_morphometrics_to_nm(self, table, pixel_size_nm):
+        result = table.copy()
+
+        # Measurements currently expressed in px²
+        area_columns = [
+            # Myelin
+            "myelin_area",
+            "myelin_hole_area",
+            "myelin_filled_area",
+
+            # Axon
+            "axon_area",
+
+            # Unmyelinated axon
+            "unaxon_area",
+        ]
+
+        # Measurements currently expressed in px
+        length_columns = [
+            # Myelin
+            "myelin_axis_minor_length",
+            "myelin_axis_major_length",
+            "myelin_feret_diameter_max",
+            "myelin_feret_max",
+            "myelin_feret_min",
+            "myelin_width",
+            "myelin_q25",
+            "myelin_q75",
+            "myelin_width_min_feret_direction",
+            "myelin_width_max_feret_direction",
+
+            # Axon
+            "axon_feret_max",
+            "axon_feret_min",
+
+            # Unmyelinated axon
+            "unaxon_axis_minor_length",
+            "unaxon_axis_major_length",
+            "unaxon_feret_diameter_max",
+            "unaxon_feret_max",
+            "unaxon_feret_min",
+        ]
+
+        # px² -> nm²
+        for col in area_columns:
+            if col in result.columns:
+                result[col] = (
+                        pd.to_numeric(result[col], errors="coerce")
+                        * pixel_size_nm ** 2
+                )
+
+        # px -> nm
+        for col in length_columns:
+            if col in result.columns:
+                result[col] = (
+                        pd.to_numeric(result[col], errors="coerce")
+                        * pixel_size_nm
+                )
+
+        rename_columns = {}
+
+        for col in area_columns:
+            if col in result.columns:
+                rename_columns[col] = f"{col}_nm2"
+
+        for col in length_columns:
+            if col in result.columns:
+                rename_columns[col] = f"{col}_nm"
+
+        result.rename(
+            columns=rename_columns,
+            inplace=True,
+        )
+
+        result["pixel_size_nm_per_px"] = pixel_size_nm
+
+        return result
+
+    def generate_xls_report(self, name, pixel_size_nm):
+        future = self.executor.submit(
+            self._generate_xls_report,
+            name,
+            pixel_size_nm,
+        )
         return future
 
-    def _generate_xls_report(self, name):
+    def _generate_xls_report(self, name, pixel_size_nm):
         total_table = pd.DataFrame()
+
         for row in range(self._ann_model.rowCount()):
             item = self._ann_model.item(row, 0)
-            data = item.data(Qt.UserRole + 2)
-            total_table = pd.concat([total_table, data], axis=0)
 
-        total_table.to_excel(name, index=False, engine="xlsxwriter")
+            if item is None:
+                continue
+
+            data = item.data(Qt.UserRole + 2)
+
+            if data is None:
+                continue
+
+            total_table = pd.concat(
+                [total_table, data],
+                axis=0,
+                ignore_index=True,
+            )
+
+        if total_table.empty:
+            raise ValueError("No morphometrics available to export.")
+
+        total_table = self._convert_morphometrics_to_nm(
+            total_table,
+            pixel_size_nm,
+        )
+
+        total_table.to_excel(
+            name,
+            index=False,
+            engine="xlsxwriter",
+        )
+

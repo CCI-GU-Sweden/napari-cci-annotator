@@ -409,13 +409,32 @@ def get_morphos_for_unaxon_label_data(
     return obj_table
 
     
-def create_morpho_table_from_data(name, myelin_label_image, axon_label_image, data_image):
-
+def create_morpho_table_from_data(
+    name,
+    myelin_label_image,
+    axon_label_image,
+    data_image,
+):
     total_table = pd.DataFrame()
-    tot_cnt = 0
-    for data in morpho_data_generator(myelin_label_image,axon_label_image, data_image):
-        total_table = pd.concat([total_table, data], axis=0)
-        tot_cnt += 1
-        
-    total_table.to_excel(name, index=False, engine='xlsxwriter')
+
+    generator = morpho_data_generator(
+        myelin_label_image,
+        axon_label_image,
+        data_image,
+    )
+
+    next(generator)
+
+    for data in generator:
+        total_table = pd.concat(
+            [total_table, data],
+            axis=0,
+            ignore_index=True,
+        )
+
+    total_table.to_excel(
+        name,
+        index=False,
+        engine="xlsxwriter",
+    )
 
