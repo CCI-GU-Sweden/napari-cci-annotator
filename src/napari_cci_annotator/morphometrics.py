@@ -161,21 +161,23 @@ def unaxon_morpho_data_generator(unaxon_label_image, data_image):
         yield get_morphos_for_unaxon_label_data(unaxon_lbl, unaxon_bw, img_data, min_r, min_c)
 
 def auto_calculate_axon_region(myelin_bw_fill, myelin_bw):
-    auto_axon_region = np.logical_xor(myelin_bw_fill,myelin_bw)
+    auto_axon_region = np.logical_xor(myelin_bw_fill, myelin_bw)
+
     if np.sum(auto_axon_region) >= 100:
-        return auto_axon_region
-    
+        return auto_axon_region, True
+
     warnings.warn("The axon was most probably not closed.")
-    #recalculate the region differently
+
+    # Recalculate the region differently
     myelin_bw_fill = convex_hull_image(myelin_bw_fill)
-    auto_axon_region = np.logical_xor(myelin_bw_fill,myelin_bw)
+    auto_axon_region = np.logical_xor(myelin_bw_fill, myelin_bw)
     auto_axon_region = isotropic_erosion(auto_axon_region, 3)
     auto_axon_region = remove_small_objects(auto_axon_region, min_size=500)
-    if np.sum(auto_axon_region)<500:
-        #print("after axon sum...")
-        return None
 
-    return auto_axon_region
+    if np.sum(auto_axon_region) < 500:
+        return None, False
+
+    return auto_axon_region, False
     
 def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_data, axon_max_label, x_offset = 0, y_offset = 0):
     
@@ -213,8 +215,11 @@ def get_morphos_for_label_data(myelin_lbl, myelin_bw, axon_lbl, axon_bw, img_dat
     # Create the padded myelin_bw image to avoid edge effects in the contours
     myelin_bw_fill = ndimage.binary_fill_holes(myelin_bw)
 
+    auto_axon_region, myelin_closed = auto_calculate_axon_region(myelin_bw_fill, myelin_bw)
+    obj_table['myelin_closed'] = myelin_closed
+
     if axon_bw is None:
-        axon_region = auto_calculate_axon_region(myelin_bw_fill,myelin_bw)
+        axon_region = auto_axon_region
         obj_table['axon_calculation'] = "Automatic"
     else:
         obj_table['axon_calculation'] = "Annotation"

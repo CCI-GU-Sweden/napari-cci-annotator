@@ -52,6 +52,7 @@ class AnnotationsHandler:
                 "Axon area",
                 "Axon calcu.",
                 "status",
+                "myelin_closed"
             ]
 
         self._ann_model.setColumnCount(len(headers))
@@ -171,6 +172,12 @@ class AnnotationsHandler:
 
             items.append(statusItem)
 
+            # Myelin closure status
+            myelin_closed = data["myelin_closed"][0]
+            closedItem = QStandardItem(str(myelin_closed))
+            closedItem.setData(myelin_closed, Qt.UserRole + 1)
+            items.append(closedItem)
+
             self._ann_model.appendRow(items)
             print(f"adding {cnt} to model, status: {data['status_ok'][0]}")
             cnt += 1
@@ -264,7 +271,7 @@ class AnnotationsHandler:
             float(self._proxy_model.data(x_idx)),
             float(self._proxy_model.data(y_idx)),
         )
-    
+
     def get_status_msg_for_row(self, row):
         idx = self._proxy_model.index(row, 6)
         return str(self._proxy_model.data(idx))
